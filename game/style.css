@@ -1,0 +1,54 @@
+/* Vice Harbor UI: bright tropical overlay chrome for the Canvas 2D world. */
+html, body { margin: 0; height: 100%; overflow: hidden; background: #0b2a3a; font-family: "Segoe UI", Verdana, system-ui, sans-serif; }
+#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+.hidden { display: none !important; }
+#status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---------- HUD ---------- */
+#hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+#hud-top-left { position: absolute; top: 14px; left: 16px; }
+#hud-money { font-size: 30px; font-weight: 800; color: #ffe066; text-shadow: 0 2px 0 #7a4d00, 0 0 14px rgba(0,0,0,.45); letter-spacing: 1px; }
+#hud-health-wrap { width: 190px; height: 14px; margin-top: 5px; background: rgba(0,0,0,.55); border: 2px solid #fff3; border-radius: 8px; overflow: hidden; }
+#hud-health { height: 100%; width: 100%; background: linear-gradient(90deg, #ff5d73, #ff9f68); transition: width .15s; }
+#hud-vehicle { margin-top: 5px; display: inline-block; padding: 2px 9px; border-radius: 8px; background: #00b4a2; color: #fff; font-weight: 700; font-size: 12px; letter-spacing: 1px; }
+#hud-top-right { position: absolute; top: 10px; right: 16px; text-align: right; }
+#hud-stars { font-size: 34px; color: #ffd23f; text-shadow: 0 2px 0 #7a4d00, 0 0 12px rgba(0,0,0,.5); letter-spacing: 3px; }
+#hud-bust-wrap { margin-top: 4px; width: 170px; height: 13px; margin-left: auto; background: rgba(0,0,0,.55); border: 2px solid #f00a; border-radius: 8px; overflow: hidden; position: relative; }
+#hud-bust { height: 100%; width: 0%; background: #ff3b30; }
+#hud-bust-wrap span { position: absolute; inset: 0; font-size: 9px; color: #fff; text-align: center; letter-spacing: 2px; }
+#hud-objective { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); max-width: 520px; text-align: center; background: rgba(4, 32, 46, .72); border: 1px solid #ffd23f88; border-radius: 12px; padding: 7px 18px 8px; }
+#hud-mission-name { color: #ffd23f; font-weight: 800; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; }
+#hud-objective-text { color: #fff; font-size: 16px; font-weight: 600; margin-top: 1px; }
+#hud-objective-dist { color: #7fe7dc; font-size: 12px; font-weight: 700; }
+#minimap { position: absolute; right: 16px; bottom: 16px; width: 196px; height: 150px; border: 3px solid rgba(255,255,255,.75); border-radius: 12px; box-shadow: 0 4px 18px rgba(0,0,0,.45); background: #0e4d64; }
+#hud-controls-hint { position: absolute; left: 16px; bottom: 14px; color: #eafffa; font-size: 12px; font-weight: 600; text-shadow: 0 1px 3px #000; background: rgba(4,32,46,.5); padding: 4px 10px; border-radius: 8px; }
+#hud-toast { position: absolute; top: 110px; left: 50%; transform: translateX(-50%); background: #ffd23f; color: #402b00; font-weight: 800; font-size: 19px; padding: 9px 22px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.4); }
+#btn-mute { position: absolute; left: 16px; bottom: 44px; pointer-events: auto; border: 0; border-radius: 8px; padding: 5px 10px; font-weight: 700; background: rgba(4,32,46,.65); color: #fff; cursor: pointer; }
+
+/* ---------- Dialogue ---------- */
+#dialogue { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); width: min(680px, 92vw); z-index: 8; background: rgba(4, 26, 38, .92); border: 2px solid #ffd23f; border-radius: 14px; padding: 12px 18px 8px; cursor: pointer; }
+#dialogue-speaker { color: #ffd23f; font-weight: 800; letter-spacing: 1px; font-size: 14px; text-transform: uppercase; }
+#dialogue-text { color: #fff; font-size: 17px; line-height: 1.45; margin-top: 3px; min-height: 48px; }
+#dialogue-next { color: #7fe7dc; font-size: 11px; text-align: right; }
+
+/* ---------- Menus ---------- */
+#start-screen, #pause-screen, #end-screen { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; }
+#start-screen { background: linear-gradient(180deg, rgba(2,48,71,.25), rgba(2,48,71,.55)); }
+#pause-screen, #end-screen { background: rgba(2, 24, 36, .68); }
+#start-panel { text-align: center; max-width: 720px; padding: 26px 34px; background: rgba(3, 34, 50, .78); border: 2px solid #ffd23f99; border-radius: 20px; box-shadow: 0 18px 60px rgba(0,0,0,.5); }
+#start-kicker { color: #7fe7dc; letter-spacing: 4px; font-weight: 700; font-size: 12px; }
+#start-title { margin: 4px 0 6px; font-size: 64px; line-height: .95; color: #ff5d8f; letter-spacing: 2px; text-shadow: 0 4px 0 #7c1d3f, 0 0 26px rgba(255,93,143,.5); font-style: italic; }
+#start-title span { color: #ffd23f; text-shadow: 0 4px 0 #7a4d00, 0 0 26px rgba(255,210,63,.5); }
+#start-story { color: #eafcff; font-size: 15.5px; line-height: 1.5; margin: 8px auto; max-width: 620px; }
+#start-controls { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px 14px; color: #c9f4ee; font-size: 13px; margin: 12px 0; text-align: left; }
+#start-controls b { color: #ffd23f; }
+#start-buttons { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
+#start-buttons button, .menu-panel button { border: 0; border-radius: 12px; padding: 12px 20px; font-size: 16px; font-weight: 800; cursor: pointer; background: #ffd23f; color: #402b00; box-shadow: 0 4px 0 #b98a00; }
+#start-buttons button:hover, .menu-panel button:hover { filter: brightness(1.08); }
+#btn-continue { background: #2ee6a8; color: #04372a; box-shadow: 0 4px 0 #0d8a5f; }
+#btn-how { background: #48cae4; color: #06303f; box-shadow: 0 4px 0 #1d7f9e; }
+#start-how { color: #ffe9a8; font-size: 13.5px; line-height: 1.5; max-width: 600px; margin: 12px auto 0; }
+#start-foot { color: #9fd8d2; font-size: 11.5px; margin-top: 14px; }
+.menu-panel { text-align: center; background: rgba(3, 34, 50, .92); border: 2px solid #ffd23f99; border-radius: 18px; padding: 26px 40px; display: flex; flex-direction: column; gap: 10px; min-width: 320px; }
+.menu-panel h2 { color: #ffd23f; margin: 0 0 4px; font-size: 34px; letter-spacing: 2px; }
+.menu-panel p { color: #eafcff; margin: 0 0 8px; line-height: 1.5; }
