@@ -1,103 +1,163 @@
-// audio.js — all of Vice Harbor's sound, synthesized with the WebAudio API:
-// a tropical chord loop, engine hum, patrol sirens, gunshots, pickups and UI.
-// No audio files exist; everything is oscillators and filtered noise.
+// audio.js — every sound in Vice Harbor is synthesized with WebAudio:
+// a tropical chord loop, an engine hum that follows speed, police sirens,
+// gunshots, thuds and pickups. No audio files, nothing fetched.
 
-/** The whole sound engine. Created once; init() must run on a user gesture. */
-export class GameAudio {
+const TROPICAL_CHORDS = [
+  [261.63, 329.63, 392.0, 493.88], // Cmaj7
+  [220.0, 261.63, 329.63, 392.0], // Am7
+  [174.61, 220.0, 261.63, 329.63], // Fmaj7
+  [196.0, 246.94, 293.66, 392.0], // G add
+];
+
+export class HarborAudio {
   constructor() {
-    this.ctx = null; this.muted = false; this.master = null;
-    this.engineOsc = null; this.engineGain = null; this.musicTimer = null; this.chordIndex = 0;
+    this.context = null;
+    this.masterGain = null;
+    this.muted = false;
+    this.chordIndex = 0;
+    this.nextChordAt = 0;
+    this.engineOscillator = null;
+    this.engineGain = null;
+    this.sirenOscillator = null;
+    this.sirenGain = null;
   }
 
-  /** Build the AudioContext and start the ambient music loop. Call on first click/key. */
-  initAudioOnGesture() {
-    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
-    this.ctx = new AC();
-    this.master = this.ctx.createGain(); this.master.gain.value = this.muted ? 0 : 0.5;
-    this.master.connect(this.ctx.destination);
-    this.startEngineHum();
-    this.startTropicalMusicLoop();
+  unlockAudio() {
+    if (this.context) {
+      if (this.context.state === 'suspended') this.context.resume();
+      return;
+    }
+    const AudioCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtor) return;
+    this.context = new AudioCtor();
+    this.masterGain = this.context.createGain();
+    this.masterGain.gain.value = this.muted ? 0 : 0.5;
+    this.masterGain.connect(this.context.destination);
+
+    this.engineOscillator = this.context.createOscillator();
+    this.engineOscillator.type = 'sawtooth';
+    this.engineOscillator.frequency.value = 55;
+    this.engineGain = this.context.createGain();
+    this.engineGain.gain.value = 0;
+    this.engineOscillator.connect(this.engineGain);
+    this.engineGain.connect(this.masterGain);
+    this.engineOscillator.start();
+
+    this.sirenOscillator = this.context.createOscillator();
+    this.sirenOscillator.type = 'triangle';
+    this.sirenOscillator.frequency.value = 700;
+    this.sirenGain = this.context.createGain();
+    this.sirenGain.gain.value = 0;
+    this.sirenOscillator.connect(this.sirenGain);
+    this.sirenGain.connect(this.masterGain);
+    this.sirenOscillator.start();
+    this.nextChordAt = this.context.currentTime + 0.1;
   }
 
-  /** Toggle mute (M key / HUD button). Returns the new muted flag. */
-  toggleMute() {
-    this.muted = !this.muted;
-    if (this.master && this.ctx) this.master.gain.setTargetAtTime(this.muted ? 0 : 0.5, this.ctx.currentTime, 0.05);
-    return this.muted;
+  setMuted(muted) {
+    this.muted = muted;
+    if (this.masterGain && this.context) {
+      this.masterGain.gain.setTargetAtTime(muted ? 0 : 0.5, this.context.currentTime, 0.05);
+    }
   }
 
-  /** A short oscillator blip — the building block of most effects. */
-  playTone(freqFrom, freqTo, duration, type, volume, when = 0) {
-    if (!this.ctx || this.muted) return;
-    const t = this.ctx.currentTime + when;
-    const osc = this.ctx.createOscillator(), gain = this.ctx.createGain();
+  playTone(freqFrom, freqTo, duration, type, volume, delay = 0) {
+    if (!this.context || this.muted) return;
+    const t0 = this.context.currentTime + delay;
+    const osc = this.context.createOscillator();
+    const gain = this.context.createGain();
     osc.type = type;
-    osc.frequency.setValueAtTime(freqFrom, t);
-    osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqTo), t + duration);
-    gain.gain.setValueAtTime(volume, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
-    osc.connect(gain); gain.connect(this.master);
-    osc.start(t); osc.stop(t + duration + 0.02);
+    osc.frequency.setValueAtTime(freqFrom, t0);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(30, freqTo), t0 + duration);
+    gain.gain.setValueAtTime(volume, t0);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(t0);
+    osc.stop(t0 + duration + 0.02);
   }
 
-  /** Filtered noise burst — gunshots, crashes, splashes. */
-  playNoiseBurst(duration, filterFreq, volume) {
-    if (!this.ctx || this.muted) return;
-    const t = this.ctx.currentTime;
-    const len = Math.max(1, Math.floor(this.ctx.sampleRate * duration));
-    const buffer = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+  playNoise(duration, volume, filterFreq) {
+    if (!this.context || this.muted) return;
+    const t0 = this.context.currentTime;
+    const length = Math.max(1, Math.floor(this.context.sampleRate * duration));
+    const buffer = this.context.createBuffer(1, length, this.context.sampleRate);
     const data = buffer.getChannelData(0);
-    for (let i = 0; i < len; i += 1) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
-    const src = this.ctx.createBufferSource(); src.buffer = buffer;
-    const filter = this.ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = filterFreq;
-    const gain = this.ctx.createGain(); gain.gain.value = volume;
-    src.connect(filter); filter.connect(gain); gain.connect(this.master);
-    src.start(t);
+    for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / length);
+    const source = this.context.createBufferSource();
+    source.buffer = buffer;
+    const filter = this.context.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = filterFreq;
+    const gain = this.context.createGain();
+    gain.gain.value = volume;
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterGain);
+    source.start(t0);
   }
 
-  /** Looping engine hum whose pitch follows the player's car speed (0..1). */
-  startEngineHum() {
-    this.engineOsc = this.ctx.createOscillator(); this.engineOsc.type = 'sawtooth';
-    this.engineOsc.frequency.value = 40;
-    const filter = this.ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 320;
-    this.engineGain = this.ctx.createGain(); this.engineGain.gain.value = 0;
-    this.engineOsc.connect(filter); filter.connect(this.engineGain); this.engineGain.connect(this.master);
-    this.engineOsc.start();
+  playGunshot() {
+    this.playNoise(0.13, 0.5, 2600);
+    this.playTone(160, 45, 0.1, 'square', 0.22);
   }
 
-  /** Set engine loudness/pitch from speed ratio. */
-  setEngineSound(speedRatio) {
-    if (!this.ctx || !this.engineOsc) return;
-    const t = this.ctx.currentTime;
-    this.engineOsc.frequency.setTargetAtTime(40 + speedRatio * 130, t, 0.08);
-    this.engineGain.gain.setTargetAtTime(this.muted ? 0 : speedRatio * 0.06, t, 0.1);
+  playCrash(strength) {
+    this.playNoise(0.22, Math.min(0.6, 0.2 + strength * 0.05), 700);
+    this.playTone(90, 40, 0.2, 'sawtooth', 0.2);
   }
 
-  /** Sunny marimba-ish chord loop: Cmaj7 – Am7 – Fmaj7 – G6, one chord every 2.4 s. */
-  startTropicalMusicLoop() {
-    const chords = [[261.6, 329.6, 392, 493.9], [220, 261.6, 329.6, 392], [174.6, 220, 261.6, 329.6], [196, 246.9, 293.7, 392]];
-    const playChord = () => {
-      if (!this.ctx) return;
-      const chord = chords[this.chordIndex % chords.length]; this.chordIndex += 1;
-      chord.forEach((freq, i) => {
-        this.playTone(freq, freq, 1.5, 'triangle', 0.055, i * 0.13);
-        this.playTone(freq * 2, freq * 2, 0.7, 'sine', 0.02, i * 0.13 + 0.05);
-      });
-      this.playTone(chord[0] / 2, chord[0] / 2, 2.0, 'sine', 0.07, 0);
-    };
-    playChord();
-    this.musicTimer = setInterval(playChord, 2400);
+  playPickup() {
+    this.playTone(660, 660, 0.09, 'sine', 0.25);
+    this.playTone(880, 880, 0.12, 'sine', 0.25, 0.08);
   }
 
-  playGunshotSound(far) { this.playNoiseBurst(0.13, far ? 900 : 2400, far ? 0.12 : 0.3); this.playTone(160, 50, 0.1, 'square', far ? 0.04 : 0.1); }
-  playSwingSound() { this.playNoiseBurst(0.07, 1400, 0.08); }
-  playThudSound() { this.playTone(120, 45, 0.16, 'sine', 0.3); this.playNoiseBurst(0.08, 500, 0.14); }
-  playCrashSound() { this.playNoiseBurst(0.3, 700, 0.32); this.playTone(90, 32, 0.3, 'sawtooth', 0.14); }
-  playDoorSound() { this.playTone(300, 140, 0.09, 'square', 0.1); this.playTone(190, 120, 0.08, 'square', 0.08, 0.07); }
-  playPickupSound() { this.playTone(660, 660, 0.09, 'sine', 0.14); this.playTone(990, 990, 0.14, 'sine', 0.14, 0.08); }
-  playSirenBlip() { this.playTone(740, 990, 0.16, 'triangle', 0.028); }
-  playMissionCompleteSound() { [523, 659, 784, 1046].forEach((f, i) => this.playTone(f, f, 0.22, 'triangle', 0.13, i * 0.11)); }
-  playBustedSound() { [392, 330, 262, 196].forEach((f, i) => this.playTone(f, f * 0.94, 0.26, 'square', 0.1, i * 0.15)); }
+  playCashReward() {
+    this.playTone(523, 523, 0.09, 'triangle', 0.3);
+    this.playTone(659, 659, 0.09, 'triangle', 0.3, 0.08);
+    this.playTone(784, 784, 0.16, 'triangle', 0.32, 0.16);
+  }
+
+  playBustedSting() {
+    this.playTone(392, 392, 0.16, 'square', 0.2);
+    this.playTone(311, 311, 0.16, 'square', 0.2, 0.16);
+    this.playTone(233, 220, 0.34, 'square', 0.22, 0.32);
+  }
+
+  playDoorSlam() {
+    this.playNoise(0.07, 0.3, 500);
+  }
+
+  updateAudio(dt, game) {
+    if (!this.context) return;
+    const now = this.context.currentTime;
+    // Music: slow tropical chords with a soft marimba-style pluck on top.
+    if (now >= this.nextChordAt) {
+      const chord = TROPICAL_CHORDS[this.chordIndex % TROPICAL_CHORDS.length];
+      for (const freq of chord) this.playTone(freq, freq, 2.6, 'triangle', 0.05);
+      this.playTone(chord[1] * 2, chord[1] * 2, 0.5, 'sine', 0.05, 0.15);
+      this.playTone(chord[2] * 2, chord[2] * 2, 0.4, 'sine', 0.04, 0.55);
+      this.chordIndex++;
+      this.nextChordAt = now + 2.8;
+    }
+    // Engine hum follows the player's car speed.
+    const car = game.player.car;
+    const speed = car ? Math.abs(car.speed) : 0;
+    const engineLevel = car && !this.muted ? Math.min(0.11, speed / 2600) : 0;
+    this.engineGain.gain.setTargetAtTime(engineLevel, now, 0.08);
+    if (car) this.engineOscillator.frequency.setTargetAtTime(50 + speed * 0.55, now, 0.08);
+    // Siren swells when a patrol car is close.
+    let sirenLevel = 0;
+    if (game.wanted > 0 && game.policeCars.length > 0) {
+      let nearest = Infinity;
+      for (const cop of game.policeCars) {
+        const d = Math.hypot(cop.x - game.player.x, cop.y - game.player.y);
+        if (d < nearest) nearest = d;
+      }
+      sirenLevel = nearest < 560 ? Math.max(0, 0.055 * (1 - nearest / 640)) : 0;
+    }
+    this.sirenGain.gain.setTargetAtTime(this.muted ? 0 : sirenLevel, now, 0.12);
+    if (sirenLevel > 0) this.sirenOscillator.frequency.setTargetAtTime(690 + Math.sin(now * 5.2) * 190, now, 0.03);
+    void dt;
+  }
 }

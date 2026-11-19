@@ -1,229 +1,220 @@
-// missions.js — Mara Voss's five-job story arc for Rico Marlow: objectives,
-// dialogue, rival crews, the marked car, rewards and progression.
+// missions.js — Rico's five-job story for fixer Mara Voss: dialogue,
+// objective stages, rewards, the gold coupe and the lighthouse finale.
 
-import { PLACES } from './city.js';
 import { distanceBetween } from './engine.js';
-import { playerPosition } from './player.js';
-import { spawnEnemyGroup } from './combat.js';
-import { createCar } from './vehicles.js';
+import { placeByName } from './city.js';
+import { makeCrewGunman } from './combat.js';
+import { makeGoldCoupe } from './vehicles.js';
+import { clearPoliceHeat } from './police.js';
 
-/**
- * The story. Each mission is a list of steps; a step is one objective:
- * goto (reach a place), pickup (reach on foot), defeat (beat named rivals),
- * stealTarget (enter the gold-ringed car), deliverCar (drive it somewhere),
- * loseCops (wanted must reach 0), escape (reach a place with any wanted).
- * Dialogue lines play when the step starts.
- */
-export const MISSIONS = [
+export const STORY_JOBS = [
   {
-    title: 'Job 1 · First Run',
-    reward: 120,
-    steps: [
-      { type: 'goto', place: 'marina', text: 'Meet Mara Voss at Marina Azul', dialogue: [
-        ['Mara Voss', 'Rico Marlow. You look like a man who owes the sea money. Good — I pay cash.'],
-        ['Mara Voss', 'A cooler by the marina office. Pick it up, no questions, and my world opens for you.'],
-      ] },
-      { type: 'pickup', place: 'marina', text: 'Pick up the cooler at Marina Azul', dialogue: [
-        ['Rico Marlow', 'Heavy cooler. Ice, fish… and something that ticks. Sure. No questions.'],
-      ] },
-      { type: 'goto', place: 'cafe', text: 'Deliver the cooler to Café Sol', dialogue: [
-        ['Mara Voss', 'Café Sol, uptown. The owner pays on sight. Try not to collect stars on the way.'],
-      ] },
+    title: 'First Run for Mara',
+    giver: 'Mara Voss',
+    reward: 150,
+    intro: [
+      ['Mara Voss', 'Rico Marlow. Heard you drive like the tide owes you money.'],
+      ['Mara Voss', 'Take this parcel from Plaza Central and drop it at Café Sol. Quiet and quick.'],
     ],
-    outro: [['Mara Voss', 'Clean run. You just earned Port Palmera money, Rico. There is more where that came from.']],
+    stages: [
+      { kind: 'goto', place: 'Plaza Central', label: 'Pick up the parcel at Plaza Central' },
+      { kind: 'goto', place: 'Café Sol', label: 'Deliver the parcel to Café Sol' },
+    ],
+    outro: [['Mara Voss', 'Clean work. Port Palmera might suit you, Rico.']],
   },
   {
-    title: 'Job 2 · Harbor Heat',
-    reward: 200,
-    steps: [
-      { type: 'goto', place: 'plaza', text: 'Collect the ledger at Plaza Central', dialogue: [
-        ['Mara Voss', 'A ledger sits in a Plaza Central kiosk. It names every bribe in the harbor — including Patrol ones.'],
-        ['Rico Marlow', 'So Captain Ortiz will be thrilled to see me carrying it.'],
-      ] },
-      { type: 'pickup', place: 'plaza', text: 'Grab the ledger (on foot)', heatOnPickup: 2, dialogue: [
-        ['Radio', 'Harbor Patrol to all units — suspect has the ledger. Captain Ortiz wants him boxed in.'],
-      ] },
-      { type: 'loseCops', text: 'Lose the Harbor Patrol', dialogue: [
-        ['Mara Voss', 'Shake them, Rico! Break their line of sight and let the heat die down.'],
-      ] },
-      { type: 'goto', place: 'hideout', text: 'Reach the Old Lighthouse Point', dialogue: [
-        ['Mara Voss', 'Good. Bring it to the lighthouse point, north-east. And Rico — stay breathing.'],
-      ] },
+    title: 'Parts for Tito',
+    giver: 'Mara Voss',
+    reward: 220,
+    intro: [
+      ['Mara Voss', 'Tito Salas at the garage needs boat parts off Marina Azul.'],
+      ['Rico Marlow', 'Pick up at the marina, drop at Tito\'s Garage. On it.'],
     ],
-    outro: [['Mara Voss', 'Ortiz is furious, which means the ledger is real gold. Two jobs down, Rico.']],
+    stages: [
+      { kind: 'goto', place: 'Marina Azul', label: 'Pick up boat parts at Marina Azul' },
+      { kind: 'goto', place: "Tito's Garage", label: "Deliver the parts to Tito's Garage" },
+    ],
+    outro: [['Tito Salas', 'These fit my fastest hull. Mara chose well.']],
   },
   {
-    title: 'Job 3 · Palm Row Rivals',
-    reward: 320,
-    steps: [
-      { type: 'goto', place: 'palmRow', text: 'Go to Palm Row', dialogue: [
-        ['Mara Voss', 'The Palm Row crew — Salvo, Bibi and Renzo — tax my boats now. Untax them. Permanently.'],
-      ] },
-      { type: 'defeat', place: 'palmRow', names: ['Salvo', 'Bibi', 'Renzo'], text: 'Defeat the Palm Row crew (3)', dialogue: [
-        ['Salvo', 'Wrong street, tourist. Palm Row collects from everybody — even ghosts.'],
-      ] },
+    title: 'Heat on Palm Row',
+    giver: 'Mara Voss',
+    reward: 260,
+    intro: [
+      ['Mara Voss', 'Captain Lena Ortiz is watching Palm Row tonight. A pickup there will draw her patrols.'],
+      ['Mara Voss', 'Grab the envelope, then lose the Harbor Patrol. However you can.'],
     ],
-    outro: [['Mara Voss', 'Palm Row is quiet again. My boats move free, and your name just got heavier.']],
+    stages: [
+      { kind: 'goto', place: 'Palm Row', label: 'Grab the envelope at Palm Row', heat: 2 },
+      { kind: 'escape', label: 'Lose the Harbor Patrol' },
+    ],
+    outro: [['Mara Voss', 'Ortiz is furious. That means you did it right.']],
   },
   {
-    title: 'Job 4 · The Night Ledger',
-    reward: 450,
-    steps: [
-      { type: 'goto', place: 'garage', text: "Meet Tito Salas at Tito's Garage", dialogue: [
-        ["Tito Salas", 'Rico! A gold Solana Coupe by the plaza holds a second ledger in its boot. Lift it for me, amigo.'],
-      ] },
-      { type: 'stealTarget', place: 'plaza', text: 'Steal the gold Solana Coupe at Plaza Central', dialogue: [
-        ['Rico Marlow', 'Gold paint, tinted glass, terrible owner. Perfect. E to steal it.'],
-      ] },
-      { type: 'deliverCar', place: 'garage', text: "Deliver the coupe to Tito's Garage", heatOnSteal: 2, dialogue: [
-        ['Radio', 'All units — gold coupe leaving Plaza Central. Ortiz: "That car does not reach the garage."'],
-      ] },
+    title: 'Palm Row Payback',
+    giver: 'Mara Voss',
+    reward: 340,
+    intro: [
+      ['Dario "Kite" Fen', 'My Palm Row crew runs this strip now, Marlow. Walk away.'],
+      ['Rico Marlow', 'Mara sends her regards, Kite. All three of you — let\'s talk.'],
     ],
-    outro: [["Tito Salas", 'Beautiful driving, amigo. The garage is yours whenever you need wheels.']],
+    stages: [
+      { kind: 'goto', place: 'Palm Row', label: 'Confront the Palm Row crew' },
+      { kind: 'defeat', place: 'Palm Row', count: 3, label: 'Defeat the Palm Row crew (3)' },
+      { kind: 'goto', place: 'Café Sol', label: 'Report back at Café Sol' },
+    ],
+    outro: [['Mara Voss', 'Kite\'s crew is done. One last job, and it glitters.']],
   },
   {
-    title: 'Job 5 · Harbor King',
-    reward: 800,
-    steps: [
-      { type: 'goto', place: 'palmRow', text: 'Face Dario "Kite" Fen at Palm Row', dialogue: [
-        ['Mara Voss', 'Last job. Kite Fen runs Palm Row now, and he put a price on your head, Rico. End it.'],
-      ] },
-      { type: 'defeat', place: 'palmRow', names: ['Pico', 'Lulu', 'Dario "Kite" Fen'], toughLast: true, text: 'Defeat Kite Fen and his crew (3)', dialogue: [
-        ['Dario "Kite" Fen', 'Marlow! The harbor has one king, and he is not some washed-up errand boy.'],
-      ] },
-      { type: 'escape', place: 'pier', text: 'Escape to Faro Pier', heatOnDefeat: 3, dialogue: [
-        ['Mara Voss', 'Kite is done — but every patrol car in Palmera is rolling. Get to Faro Pier, NOW.'],
-      ] },
+    title: 'The Gold Coupe',
+    giver: 'Mara Voss',
+    reward: 500,
+    intro: [
+      ['Mara Voss', 'A marked gold coupe sits at Plaza Central. Steal it, bring it to Faro Pier.'],
+      ['Mara Voss', 'Then vanish to the Old Lighthouse Point. After that, Port Palmera is yours.'],
     ],
-    outro: [
-      ['Mara Voss', 'The docks are ours, Rico. Port Palmera has a new name on the harbor wall…'],
-      ['Rico Marlow', 'Vice Harbor, Mara. From today, they call this place by our name.'],
+    stages: [
+      { kind: 'stealGold', place: 'Plaza Central', label: 'Steal the marked gold coupe at Plaza Central' },
+      { kind: 'goto', place: 'Faro Pier', label: 'Deliver the gold coupe to Faro Pier', needsGold: true },
+      { kind: 'goto', place: 'Old Lighthouse Point', label: 'Reach the Old Lighthouse Point' },
     ],
+    outro: [['Mara Voss', 'Done, Rico. The harbor remembers its own. Free roam — enjoy Port Palmera.']],
   },
 ];
 
-/** The step Rico is currently on, or null when the story is finished. */
-export function currentStep(state) {
-  const mission = MISSIONS[state.missionIndex];
-  if (!mission) return null;
-  return mission.steps[state.stepIndex] || null;
-}
-
-/** The mission object Rico is currently running, or null. */
-export function currentMission(state) { return MISSIONS[state.missionIndex] || null; }
-
-/** World position of the current objective, or null. */
-export function objectivePosition(state) {
-  const step = currentStep(state);
-  if (!step || !step.place) return null;
-  if (step.type === 'stealTarget' && state.targetCar) return { x: state.targetCar.x, y: state.targetCar.y };
-  return PLACES[step.place];
-}
-
-/** Start a step: play its dialogue and set up its world pieces (rivals, target car). */
-export function beginStep(state) {
-  const step = currentStep(state);
-  if (!step) return;
-  if (step.dialogue) state.showDialogue(step.dialogue, null);
-  if (step.type === 'defeat') {
-    state.missionEnemies = spawnEnemyGroup(state, PLACES[step.place].x + 90, PLACES[step.place].y + 40, step.names, step.toughLast);
+export class MissionRunner {
+  constructor(game) {
+    this.game = game;
+    this.jobIndex = 0;
+    this.stageIndex = 0;
+    this.jobsCompleted = 0;
+    this.active = false;
+    this.stageHeatApplied = false;
+    this.crewSpawned = false;
   }
-  if (step.type === 'stealTarget' && !state.targetCar) {
-    const car = createCar(PLACES.plaza.x + 60, PLACES.plaza.y - 130, 0, '#ffd23f', 'parked', state.rng);
-    car.isTargetCar = true; car.name = 'Solana Coupe (gold)';
-    state.targetCar = car;
-    state.parkedCars.push(car);
-  }
-}
 
-/** Finish the current mission: pay Rico, toast, autosave, queue the next job. */
-export function completeMission(state) {
-  const mission = currentMission(state);
-  if (!mission) return;
-  state.player.money += mission.reward;
-  state.missionsDone += 1;
-  state.showToast(mission.title + ' complete  +$' + mission.reward);
-  state.audio.playMissionCompleteSound();
-  state.showDialogue(mission.outro, () => {
-    state.missionIndex += 1; state.stepIndex = 0;
-    state.saveGame();
-    if (state.missionIndex >= MISSIONS.length) state.onStoryComplete();
-    else beginStep(state);
-  });
-}
-
-/** Move to the next step of the mission, or finish the mission. */
-export function advanceStep(state) {
-  const mission = currentMission(state);
-  state.stepIndex += 1;
-  state.audio.playPickupSound();
-  if (state.stepIndex >= mission.steps.length) completeMission(state);
-  else beginStep(state);
-}
-
-/** Check the current objective against the world; advance when it is met. */
-export function updateMissions(state, dt) {
-  const step = currentStep(state);
-  if (!step || state.dialogueQueue) return;
-  const p = playerPosition(state);
-  const place = step.place ? PLACES[step.place] : null;
-  switch (step.type) {
-    case 'goto':
-    case 'escape':
-      if (place && distanceBetween(p.x, p.y, place.x, place.y) < 78) {
-        if (step.type === 'escape' && step.heatOnDefeat) { /* heat already applied */ }
-        advanceStep(state);
-      }
-      break;
-    case 'pickup':
-      if (place && !state.player.car && distanceBetween(p.x, p.y, place.x, place.y) < 46) {
-        if (step.heatOnPickup) state.commitCrime(step.heatOnPickup, 'Ledger taken');
-        advanceStep(state);
-      }
-      break;
-    case 'defeat': {
-      const alive = (state.missionEnemies || []).filter((e) => !e.dead).length;
-      state.objectiveCount = alive;
-      if (alive === 0 && state.missionEnemies) {
-        state.missionEnemies = null;
-        if (step.heatOnDefeat) state.commitCrime(step.heatOnDefeat, 'Kite Fen down');
-        advanceStep(state);
-      }
-      break;
+  startJob(index) {
+    const game = this.game;
+    this.jobIndex = index;
+    this.stageIndex = 0;
+    this.stageHeatApplied = false;
+    this.crewSpawned = false;
+    this.active = index < STORY_JOBS.length;
+    if (!this.active) {
+      game.showBanner('Port Palmera is yours — free roam');
+      return;
     }
-    case 'stealTarget':
-      if (state.targetCar && state.player.car === state.targetCar) {
-        if (step.heatOnSteal || currentMission(state).steps[state.stepIndex + 1]?.heatOnSteal) { /* handled below */ }
-        advanceStep(state);
-      }
-      break;
-    case 'deliverCar':
-      if (place && state.player.car === state.targetCar && distanceBetween(p.x, p.y, place.x, place.y) < 96) {
-        // Hand the coupe over: it stays at the garage as Tito's trophy.
-        const car = state.targetCar;
-        state.player.car = null; car.kind = 'parked'; car.isTargetCar = false; car.speed = 0;
-        if (!state.parkedCars.includes(car)) state.parkedCars.push(car);
-        state.player.x = car.x + 40; state.player.y = car.y + 20;
-        state.targetCar = null;
-        advanceStep(state);
-      }
-      break;
-    case 'loseCops':
-      if (state.wanted === 0) advanceStep(state);
-      break;
-    default:
-      break;
+    const job = STORY_JOBS[index];
+    game.queueDialogue(job.intro);
+    game.showBanner(`JOB ${index + 1}: ${job.title}`);
+    this.prepareStage();
   }
-  // The steal step's heat lands when the NEXT step (deliverCar) begins with heatOnSteal.
-  const now = currentStep(state);
-  if (now && now.type === 'deliverCar' && now.heatOnSteal && !now.heatApplied) {
-    now.heatApplied = true;
-    state.commitCrime(now.heatOnSteal, 'Stolen coupe');
-  }
-}
 
-/** A short "what now" line for the HUD when between story beats. */
-export function freeRoamObjectiveText(state) {
-  if (state.missionIndex >= MISSIONS.length) return 'Story complete — Port Palmera is yours. Free roam!';
-  return 'Follow the gold beacon';
+  prepareStage() {
+    const game = this.game;
+    const stage = this.currentStage();
+    if (!stage) return;
+    this.stageHeatApplied = false;
+    if (stage.kind === 'stealGold' && !game.goldCoupe) {
+      const spot = placeByName(game.city, 'Plaza Central');
+      game.goldCoupe = makeGoldCoupe(spot.x + 46, spot.y + 88);
+    }
+    if (stage.heat) {
+      game.wanted = Math.max(game.wanted, stage.heat);
+      this.stageHeatApplied = true;
+      game.showBanner('The Harbor Patrol is on you!');
+    }
+  }
+
+  currentJob() {
+    return this.active ? STORY_JOBS[this.jobIndex] : null;
+  }
+
+  currentStage() {
+    const job = this.currentJob();
+    return job ? job.stages[this.stageIndex] : null;
+  }
+
+  currentObjective() {
+    const game = this.game;
+    const stage = this.currentStage();
+    if (!stage) return null;
+    if (stage.kind === 'escape') return { label: stage.label, x: null, y: null, distance: null };
+    const place = placeByName(game.city, stage.place);
+    const anchor = game.player.car || game.player;
+    return {
+      label: stage.label,
+      x: place.x,
+      y: place.y,
+      distance: Math.round(distanceBetween(anchor.x, anchor.y, place.x, place.y) / 10),
+    };
+  }
+
+  completeStage() {
+    const game = this.game;
+    const job = this.currentJob();
+    game.audio.playPickup();
+    this.stageIndex++;
+    if (this.stageIndex >= job.stages.length) {
+      this.completeJob();
+    } else {
+      game.showBanner('Objective updated');
+      this.prepareStage();
+    }
+  }
+
+  completeJob() {
+    const game = this.game;
+    const job = this.currentJob();
+    game.money += job.reward;
+    this.jobsCompleted++;
+    game.audio.playCashReward();
+    game.queueDialogue(job.outro);
+    game.showBanner(`JOB DONE — +$${job.reward}`);
+    const next = this.jobIndex + 1;
+    game.onJobCompleted(next);
+    this.startJob(next);
+  }
+
+  updateMissions(dt) {
+    const game = this.game;
+    const stage = this.currentStage();
+    if (!stage || game.mode !== 'playing') return;
+    void dt;
+    const anchor = game.player.car || game.player;
+
+    if (stage.kind === 'goto' || stage.kind === 'stealGold') {
+      if (stage.needsGold && game.player.car !== game.goldCoupe) {
+        // Must arrive in the gold coupe itself.
+      } else if (stage.kind === 'stealGold') {
+        if (game.player.car === game.goldCoupe && game.goldCoupe) this.completeStage();
+        return;
+      }
+      const place = placeByName(game.city, stage.place);
+      if (distanceBetween(anchor.x, anchor.y, place.x, place.y) < 78) {
+        if (stage.needsGold && game.player.car !== game.goldCoupe) return;
+        this.completeStage();
+      }
+      return;
+    }
+    if (stage.kind === 'escape') {
+      if (game.wanted <= 0) this.completeStage();
+      return;
+    }
+    if (stage.kind === 'defeat') {
+      if (!this.crewSpawned) {
+        this.crewSpawned = true;
+        game.crewDefeated = 0;
+        const place = placeByName(game.city, stage.place);
+        game.enemies.push(makeCrewGunman(place.x - 60, place.y + 40, 'Kite lookout'));
+        game.enemies.push(makeCrewGunman(place.x + 55, place.y - 35, 'Palm Row enforcer'));
+        game.enemies.push(makeCrewGunman(place.x + 10, place.y + 85, 'Dario "Kite" Fen'));
+        game.showBanner('The Palm Row crew opens fire!');
+      }
+      if (game.crewDefeated >= stage.count) {
+        clearPoliceHeat(game);
+        this.completeStage();
+      }
+    }
+  }
 }

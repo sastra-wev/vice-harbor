@@ -1,104 +1,122 @@
-// police.js — the Harbor Patrol: the wanted-star system, patrol spawns at the
-// city edge, pursuit steering that rams and blocks, and the bust meter.
+// police.js — the Harbor Patrol: wanted stars, predictive pursuit, ramming,
+// roadblocks-by-position, the bust meter and heat cooling out of sight.
 
-import { clampValue, turnAngleTowards, angleTowards, distanceBetween } from './engine.js';
-import { createCar, drawCar, updateCarDamageEffects } from './vehicles.js';
-import { playerPosition, playerSpeed } from './player.js';
+import { clampNumber, turnAngleTowards, distanceBetween } from './engine.js';
+import { VERTICAL_ROADS, HORIZONTAL_ROADS } from './city.js';
+import { makeCar, driveCarPhysics } from './vehicles.js';
+import { playerAnchor } from './player.js';
 
-export const MAX_WANTED = 5;
-
-/** How many patrol cars each wanted level sends after Rico. */
-export function policeCountForWanted(wanted) { return wanted <= 0 ? 0 : 1 + wanted; }
-
-/** Register a crime: raise the wanted level (capped) and restart the heat clock. */
-export function commitCrime(state, stars, label) {
-  if (state.mode !== 'play') return;
-  const before = state.wanted;
-  state.wanted = clampValue(state.wanted + stars, 0, MAX_WANTED);
-  state.heatTimer = 0;
-  state.lastCrimeLabel = label;
-  if (state.wanted > before) state.showToast('★ WANTED — ' + label);
-}
-
-/** Spawn one patrol car just off-screen, at the nearest road edge to the player. */
-export function spawnPoliceCar(state) {
-  const p = playerPosition(state);
-  const angle = state.rng() * Math.PI * 2;
-  const x = clampValue(p.x + Math.cos(angle) * 560, 60, 2440);
-  const y = clampValue(p.y + Math.sin(angle) * 460, 60, 1560);
-  const car = createCar(x, y, angleTowards(x, y, p.x, p.y), '#f4f6f8', 'police', state.rng);
-  car.cruiseSpeed = 300;
-  state.policeCars.push(car);
-}
-
-/** Keep the patrol fleet matched to the wanted level; cool the heat over time. */
-export function updateWantedSystem(state, dt) {
-  state.heatTimer += dt;
-  // Heat cools when no cop can see Rico for a while.
-  const p = playerPosition(state);
-  let seen = false;
-  for (const cop of state.policeCars) if (distanceBetween(cop.x, cop.y, p.x, p.y) < 330) seen = true;
-  if (state.wanted > 0 && state.heatTimer > 9 && !seen) {
-    state.wanted -= 1; state.heatTimer = 0;
-    state.showToast(state.wanted === 0 ? 'You lost the Harbor Patrol' : 'Heat cooling…');
+export function reportCrimeToPolice(game, amount, reason) {
+  if (game.mode !== 'playing') return;
+  const before = Math.floor(game.wanted);
+  game.wanted = clampNumber(game.wanted + amount, 0, 5);
+  game.lastCrimeAt = game.time;
+  game.lastCrimeReason = reason;
+  if (Math.floor(game.wanted) > before) {
+    game.showBanner(`WANTED ${'★'.repeat(Math.floor(game.wanted))} — ${reason}`);
   }
-  const wantedCount = policeCountForWanted(state.wanted);
-  while (state.policeCars.length < wantedCount) spawnPoliceCar(state);
-  while (state.policeCars.length > wantedCount) {
-    // The farthest patrol car gives up and leaves.
-    let farIndex = 0, farD = -1;
-    state.policeCars.forEach((cop, i) => { const d = distanceBetween(cop.x, cop.y, p.x, p.y); if (d > farD) { farD = d; farIndex = i; } });
-    state.policeCars.splice(farIndex, 1);
-  }
-  if (state.wanted > 0 && state.rng() < dt * 0.4) state.audio.playSirenBlip();
 }
 
-/** Steer one patrol car: chase, predict, ram when close, block the road ahead. */
-export function updatePoliceCar(state, car, dt) {
-  const p = playerPosition(state);
-  const dist = distanceBetween(car.x, car.y, p.x, p.y);
-  // Aim at where the player will be, slightly ahead — the blocking move.
-  const lead = clampValue(dist / 320, 0, 0.85);
-  const targetX = p.x + Math.cos(state.player.car ? state.player.car.angle : state.player.angle) * playerSpeed(state) * lead * 0.6;
-  const targetY = p.y + Math.sin(state.player.car ? state.player.car.angle : state.player.angle) * playerSpeed(state) * lead * 0.6;
-  const desired = angleTowards(car.x, car.y, targetX, targetY);
-  car.angle = turnAngleTowards(car.angle, desired, 2.4 * dt);
-  const topSpeed = state.wanted >= 4 ? 345 : 312;
-  const catching = dist > 46;
-  car.speed += Math.sign((catching ? topSpeed : 0) - car.speed) * Math.min(Math.abs((catching ? topSpeed : 0) - car.speed), 300 * dt);
-  car.x += Math.cos(car.angle) * car.speed * dt;
-  car.y += Math.sin(car.angle) * car.speed * dt;
-  car.x = clampValue(car.x, 26, 2474); car.y = clampValue(car.y, 26, 1700);
-  // Patrol cars shove off buildings rather than entering them.
-  for (const b of state.city.buildings) {
-    if (car.x > b.x - 22 && car.x < b.x + b.w + 22 && car.y > b.y - 22 && car.y < b.y + b.h + 22) {
-      car.speed *= 0.4;
-      car.x += (car.x < b.x + b.w / 2 ? -1 : 1) * 60 * dt * 4;
-      car.y += (car.y < b.y + b.h / 2 ? -1 : 1) * 60 * dt * 4;
+function spawnPatrolCar(game) {
+  const anchor = playerAnchor(game);
+  // Spawn on a road ring around the player, out of immediate view.
+  const ring = 480 + game.rng() * 160;
+  const theta = game.rng() * Math.PI * 2;
+  let x = anchor.x + Math.cos(theta) * ring;
+  let y = anchor.y + Math.sin(theta) * ring;
+  // Snap to the nearest road so patrols arrive by street, not through walls.
+  const nearV = VERTICAL_ROADS.reduce((best, rx) => (Math.abs(rx - x) < Math.abs(best - x) ? rx : best), VERTICAL_ROADS[0]);
+  const nearH = HORIZONTAL_ROADS.reduce((best, ry) => (Math.abs(ry - y) < Math.abs(best - y) ? ry : best), HORIZONTAL_ROADS[0]);
+  if (Math.abs(nearV - x) < Math.abs(nearH - y)) x = nearV;
+  else y = nearH;
+  x = clampNumber(x, 60, 2300);
+  y = clampNumber(y, 60, 1940);
+  const car = makeCar(x, y, Math.atan2(anchor.y - y, anchor.x - x), '#f8f9fa', 'sedan', 'police');
+  car.driver = 'police';
+  game.policeCars.push(car);
+}
+
+export function updatePolicePursuit(game, dt) {
+  const wantedStars = Math.floor(game.wanted);
+  // Keep the patrol strength matched to the wanted level.
+  game.policeSpawnTimer -= dt;
+  const desired = wantedStars <= 0 ? 0 : Math.min(5, wantedStars + 1);
+  if (game.policeCars.length < desired && game.policeSpawnTimer <= 0) {
+    spawnPatrolCar(game);
+    game.policeSpawnTimer = 1.6;
+  }
+  if (game.policeCars.length > desired + 1) {
+    game.policeCars.splice(0, game.policeCars.length - desired - 1);
+  }
+
+  const anchor = playerAnchor(game);
+  const anchorVelX = game.player.car ? Math.cos(game.player.car.angle) * game.player.car.speed : 0;
+  const anchorVelY = game.player.car ? Math.sin(game.player.car.angle) * game.player.car.speed : 0;
+  let nearestCop = Infinity;
+  let anyCopSeesPlayer = false;
+
+  for (const cop of game.policeCars) {
+    const dist = distanceBetween(cop.x, cop.y, anchor.x, anchor.y);
+    nearestCop = Math.min(nearestCop, dist);
+    if (dist < 430) anyCopSeesPlayer = true;
+    // Predictive chase: aim where the player will be, offset per cop so
+    // they surround rather than queue.
+    const lead = clampNumber(dist / 320, 0, 0.85);
+    const slot = (cop.id % 3 - 1) * 46;
+    const aimX = anchor.x + anchorVelX * lead + Math.cos(cop.angle) * slot * 0.2 - Math.sin(cop.angle) * slot * 0.1;
+    const aimY = anchor.y + anchorVelY * lead + Math.sin(cop.angle) * slot * 0.2 + Math.cos(cop.angle) * slot * 0.1;
+    const wantedAngle = Math.atan2(aimY - cop.y, aimX - cop.x);
+    const angleDiff = Math.abs(((wantedAngle - cop.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+    const steer = turnAngleTowards(0, ((wantedAngle - cop.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI, 1) ;
+    const throttle = dist > 55 ? 1 : 0.15;
+    // Reuse the shared driving physics with a steering shim.
+    const previousAngle = cop.angle;
+    driveCarPhysics(cop, throttle, clampNumber(steer * 1.4, -1, 1), dt, game.city, (strength) => {
+      game.audio.playCrash(strength / 60);
+    });
+    if (angleDiff > 2.6 && dist < 90) cop.angle = previousAngle + steer * dt * 1.4;
+    // Ram contact: shove and damage the player's car, spark particles.
+    if (game.player.car && dist < 40) {
+      const car = game.player.car;
+      car.health = Math.max(0, car.health - dt * 9);
+      car.x += Math.cos(cop.angle) * dt * 42;
+      car.y += Math.sin(cop.angle) * dt * 42;
+      if (game.rng() < dt * 6) game.spawnParticles(car.x, car.y, '#ffd166', 3);
     }
   }
-  updateCarDamageEffects(state, car, dt);
+  game.copSeesPlayer = anyCopSeesPlayer;
+
+  // Heat cools while no patrol can see the player.
+  if (game.wanted > 0) {
+    if (!anyCopSeesPlayer) {
+      game.unseenTimer += dt;
+      if (game.unseenTimer > 7) {
+        game.wanted = Math.max(0, game.wanted - dt * 0.14);
+        if (game.wanted <= 0.02) {
+          game.wanted = 0;
+          game.policeCars.length = 0;
+          game.showBanner('You lost the Harbor Patrol');
+        }
+      }
+    } else {
+      game.unseenTimer = 0;
+    }
+  }
+
+  // Bust meter: fills when a patrol is on top of a slow or on-foot player.
+  const playerSpeed = game.player.car ? Math.abs(game.player.car.speed) : 200;
+  const caught = nearestCop < 62 && (!game.player.car || playerSpeed < 26);
+  if (game.wanted > 0 && caught) {
+    game.bust = clampNumber(game.bust + dt / 2.6, 0, 1);
+    if (game.bust >= 1) game.onPlayerBusted();
+  } else {
+    game.bust = clampNumber(game.bust - dt / 3.2, 0, 1);
+  }
 }
 
-/** The bust meter: fills while a patrol car is close and Rico is slow or on foot. */
-export function updateBustMeter(state, dt) {
-  const p = playerPosition(state);
-  let nearCop = false;
-  for (const cop of state.policeCars) if (distanceBetween(cop.x, cop.y, p.x, p.y) < 78) nearCop = true;
-  const slow = playerSpeed(state) < 42;
-  if (state.wanted > 0 && nearCop && slow) state.bustMeter = Math.min(1, state.bustMeter + dt / 2.6);
-  else state.bustMeter = Math.max(0, state.bustMeter - dt / 1.4);
-  if (state.bustMeter >= 1) state.onPlayerBusted();
-}
-
-/** Advance the whole police system one frame. */
-export function updatePolice(state, dt) {
-  updateWantedSystem(state, dt);
-  for (const cop of state.policeCars) updatePoliceCar(state, cop, dt);
-  updateBustMeter(state, dt);
-}
-
-/** Draw every patrol car with its flashing light bar. */
-export function drawPoliceCars(ctx, state, time) {
-  for (const cop of state.policeCars) drawCar(ctx, cop, time);
+export function clearPoliceHeat(game) {
+  game.wanted = 0;
+  game.bust = 0;
+  game.unseenTimer = 0;
+  game.policeCars.length = 0;
 }

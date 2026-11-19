@@ -3,87 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vice Harbor — an original open-world crime game in Port Palmera</title>
+<title>Vice Harbor — Port Palmera</title>
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-<canvas id="game" aria-label="Vice Harbor: explore Port Palmera on foot and by car, run missions, evade the police"></canvas>
-
-<div id="hud" class="hidden">
-  <div id="hud-top-left">
-    <div id="hud-money">$0</div>
-    <div id="hud-health-wrap"><div id="hud-health"></div></div>
-    <div id="hud-vehicle" class="hidden">VEHICLE</div>
-  </div>
-  <div id="hud-top-right">
-    <div id="hud-stars" aria-label="wanted level">☆☆☆☆☆</div>
-    <div id="hud-bust-wrap" class="hidden"><div id="hud-bust"></div><span>BUSTED?</span></div>
-  </div>
-  <div id="hud-objective">
-    <div id="hud-mission-name">Free roam</div>
-    <div id="hud-objective-text">Explore Port Palmera</div>
-    <div id="hud-objective-dist"></div>
-  </div>
-  <canvas id="minimap" width="196" height="150"></canvas>
-  <div id="hud-controls-hint">WASD move · E enter/exit car · Shift sprint · Mouse aim · Click shoot · F melee · P pause · M mute</div>
-  <div id="hud-toast" class="hidden"></div>
-  <button id="btn-mute" type="button">🔊 SOUND ON</button>
-</div>
-
-<div id="dialogue" class="hidden">
-  <div id="dialogue-speaker">Mara Voss</div>
-  <div id="dialogue-text"></div>
-  <div id="dialogue-next">▼ click or press Space</div>
-</div>
-
-<div id="start-screen">
-  <div id="start-panel">
-    <div id="start-kicker">PORT PALMERA · EST. SUNSHINE</div>
-    <h1 id="start-title">VICE <span>HARBOR</span></h1>
-    <p id="start-story">Rico Marlow washed up in Port Palmera with a duffel bag, a fake name and one
-    contact: Mara Voss, the fixer who runs the marina. Run her errands, lift the right cars,
-    dodge Captain Ortiz and her Harbor Patrol, and fight the Palm Row crew for the docks —
-    five jobs stand between Rico and owning a piece of the harbor.</p>
-    <div id="start-controls">
-      <div><b>W A S D / ←↑↓→</b> move &amp; drive</div>
-      <div><b>E</b> steal / enter / exit car</div>
-      <div><b>Shift</b> sprint · <b>Mouse</b> aim</div>
-      <div><b>Click</b> shoot · <b>F</b> melee</div>
-      <div><b>P / Esc</b> pause · <b>M</b> mute</div>
-      <div><b>Enter</b> also enters cars</div>
-    </div>
-    <div id="start-buttons">
-      <button id="btn-start" type="button">▶ START — NEW GAME</button>
-      <button id="btn-continue" type="button" class="hidden">↻ CONTINUE (saved)</button>
-      <button id="btn-how" type="button">? HOW IT WORKS</button>
-    </div>
-    <p id="start-how" class="hidden">Follow the gold beacon to your objective. Stealing cars, shooting
-    and ramming raise your wanted stars — more stars, more Harbor Patrol. Lose them by breaking
-    line of sight. Finish all five of Mara's jobs to rule the harbor. Progress saves automatically
-    after every job (and with P in the pause menu).</p>
-    <p id="start-foot">An original game: city, people and story invented for Port Palmera. No assets from any commercial game.</p>
-  </div>
-</div>
-
-<div id="pause-screen" class="hidden">
-  <div class="menu-panel">
-    <h2>PAUSED</h2>
-    <p id="pause-stats"></p>
-    <button id="btn-resume" type="button">▶ RESUME</button>
-    <button id="btn-save" type="button">💾 SAVE GAME</button>
-    <button id="btn-load" type="button">↻ LOAD SAVE</button>
-    <button id="btn-restart" type="button">✖ NEW GAME</button>
-  </div>
-</div>
-
-<div id="end-screen" class="hidden">
-  <div class="menu-panel">
-    <h2 id="end-title">BUSTED</h2>
-    <p id="end-text"></p>
-    <button id="btn-again" type="button">▶ KEEP PLAYING</button>
-  </div>
-</div>
-
+<canvas id="game" aria-label="Vice Harbor: an open-world crime game set in the tropical city of Port Palmera"></canvas>
 <p id="status" role="status" aria-live="polite"></p>
 <script type="module" src="./src/main.js"></script>
 </body>

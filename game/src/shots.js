@@ -1,56 +1,84 @@
-// shots.js — deterministic screenshot scenes for Vice Harbor (?shot=chase|drive|walk|start).
-// Each scene is REAL game state built with the game's own systems — real traffic, real
-// Harbor Patrol AI, the real HUD — staged at a fixed seed, never a fake picture.
+// shots.js — deterministic screenshot scenes. Each ?shot= mode stages
+// REAL game state (live patrol AI, live traffic, a real mission stage)
+// and lets the normal loop run; nothing here draws a fake picture.
 
-import { spawnPoliceCar } from './police.js';
-import { PLACES } from './city.js';
+import { placeByName } from './city.js';
+import { makeCar } from './vehicles.js';
 
-/** Put Rico into the nearest parked car and return that car (used by drive/chase). */
-export function putPlayerInNearestCar(state) {
-  let best = null, bestD = 1e9;
-  for (const car of state.parkedCars) {
-    const d = Math.hypot(car.x - state.player.x, car.y - state.player.y);
-    if (d < bestD) { bestD = d; best = car; }
-  }
-  if (!best) return null;
-  state.parkedCars = state.parkedCars.filter((c) => c !== best);
-  best.kind = 'player'; best.wasStolenBefore = true;
-  state.player.car = best;
-  return best;
+export function readShotRequest() {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    shot: params.get('shot') || '',
+    seed: Number(params.get('seed') || 1) || 1,
+  };
 }
 
-/** Stage the named scene on a freshly started game state. */
-export function stageShotScene(state, name) {
-  state.dismissDialogue();
-  if (name === 'walk') {
-    // On foot on the boardwalk by Marina Azul, palms and beach around, job 1 active.
-    state.player.x = 900; state.player.y = 1652; state.player.angle = 0.4;
-    state.camera.snapTo(state.player.x, state.player.y);
+function putPlayerInCar(game, x, y, angle, color) {
+  const car = makeCar(x, y, angle, color || '#ff5964', 'coupe', 'parked');
+  car.driver = 'player';
+  car.stolenOnce = true;
+  game.parkedCars.push(car);
+  game.player.car = car;
+  game.player.x = x;
+  game.player.y = y;
+  return car;
+}
+
+export function stageShotScene(game, shot) {
+  if (!shot) return;
+  game.shotMode = shot;
+  if (shot === 'start') {
+    game.mode = 'start';
+    const plaza = placeByName(game.city, 'Plaza Central');
+    game.camera.snapTo(plaza.x + 120, plaza.y + 160);
     return;
   }
-  if (name === 'drive' || name === 'chase') {
-    // Behind the wheel on the busy east–west avenue (ROAD_YS[1] = 660).
-    state.player.x = 500; state.player.y = 660;
-    const car = putPlayerInNearestCar(state);
-    if (car) {
-      car.x = 500; car.y = 684; car.angle = 0; car.speed = 165;
-      state.player.x = car.x; state.player.y = car.y;
-    }
-    state.camera.snapTo(560, 668);
-    if (name === 'chase') {
-      // Job 2's finale: ledger delivered run — 3 stars, patrol already on his tail,
-      // objective (Old Lighthouse Point) live on the HUD and the minimap.
-      state.missionIndex = 1; state.stepIndex = 3;
-      state.wanted = 3; state.heatTimer = 0;
-      state.policeCars = [];
-      for (let i = 0; i < 4; i += 1) spawnPoliceCar(state);
-      // Pull two patrol cars in close behind so the chase reads at a glance.
-      if (state.policeCars[0]) { state.policeCars[0].x = 380; state.policeCars[0].y = 640; state.policeCars[0].angle = 0; state.policeCars[0].speed = 190; }
-      if (state.policeCars[1]) { state.policeCars[1].x = 330; state.policeCars[1].y = 706; state.policeCars[1].angle = 0.2; state.policeCars[1].speed = 175; }
-      state.showToast('★ WANTED — Ledger run: reach the lighthouse!');
-    }
+  game.mode = 'playing';
+  game.missions.startJob(0);
+
+  if (shot === 'walk') {
+    // Rico on the open sand, boardwalk and marina water beside him,
+    // Café Sol objective live.
+    game.player.x = 2246;
+    game.player.y = 986;
+    game.player.angle = -0.5;
+    game.missions.stageIndex = 1; // heading to Café Sol
+    game.camera.snapTo(game.player.x, game.player.y);
     return;
   }
-  // 'start' and anything else: the title screen over the marina (handled by main).
-  state.camera.snapTo(PLACES.marina.x, 1420);
+
+  if (shot === 'drive') {
+    // Eastbound on the Plaza Central avenue in thick two-way traffic,
+    // staged just past an intersection for a clean run at the next one.
+    const car = putPlayerInCar(game, 1075, 660 + 29, 0, '#35a7ff');
+    car.speed = 215;
+    game.shotAutoDrive = true;
+    game.camera.snapTo(car.x, car.y);
+    return;
+  }
+
+  if (shot === 'chase') {
+    // Three-star pursuit: patrol spawned by the real police system, the
+    // gold-coupe finale staged as the active objective.
+    const car = putPlayerInCar(game, 700, 1060 + 29, 0, '#ffd700');
+    car.speed = 240;
+    game.shotAutoDrive = true;
+    // Drop the first job's queued dialogue so the finale's own lines play.
+    game.dialogueQueue.length = 0;
+    game.dialogue = null;
+    game.missions.startJob(4);
+    game.missions.stageIndex = 2; // Reach the Old Lighthouse Point
+    game.wanted = 3;
+    game.bust = 0.85;
+    // Pre-place patrol cars in pursuit formation behind Rico; the live
+    // pursuit AI takes over from the first frame.
+    const offsets = [[-95, -34], [-150, 30], [-215, -6]];
+    for (const [ox, oy] of offsets) {
+      const cop = makeCar(car.x + ox, car.y + oy, 0, '#f8f9fa', 'sedan', 'police');
+      cop.driver = 'police';
+      cop.speed = 225;
+      game.policeCars.push(cop);
+    }
+    game.camera.snapTo(car.x + 40, car.y);
+  }
 }
