@@ -55,6 +55,18 @@ export function advanceDialogue(state) {
   return true;
 }
 
+/** Name of the Port Palmera district the player is in: the nearest named place. */
+export function nearestDistrictName(state) {
+  const p = playerPosition(state);
+  let best = 'Port Palmera', bestDist = Infinity;
+  for (const key of Object.keys(PLACES)) {
+    const place = PLACES[key];
+    const d = Math.hypot(place.x - p.x, place.y - p.y);
+    if (d < bestDist) { bestDist = d; best = place.name; }
+  }
+  return best;
+}
+
 /** Refresh all HUD readouts from state (called every frame; cheap text writes). */
 export function updateHud(state) {
   const hud = state.hud, player = state.player;
@@ -68,7 +80,7 @@ export function updateHud(state) {
   else hud.vehicle.classList.add('hidden');
   const mission = currentMission(state);
   const step = currentStep(state);
-  hud.missionName.textContent = mission ? mission.title : 'VICE HARBOR';
+  hud.missionName.textContent = (mission ? mission.title : 'VICE HARBOR') + ' — ' + nearestDistrictName(state);
   if (state.storyComplete) hud.objectiveText.textContent = 'Story complete — Port Palmera is yours. Free roam!';
   else if (step) {
     hud.objectiveText.textContent = step.text;
